@@ -89,8 +89,8 @@ namespace EaiClassAdapter
             string path, string mask, string user, string pwd, int retry, int interval, bool deleteAfter)
         {
             rc.ReceiveFileMask = mask;
-            rc.User = user;
-            rc.Password = pwd;
+            rc.User = Utils.NormalizeString(user);
+            rc.Password = pwd?.Trim('\'', '"') ?? string.Empty;  // ← 關鍵：去掉前後單引號
             rc.NetworkRetry = retry;
             rc.NetworkRetryInterval = interval;
             rc.DeleteAfterReceive = deleteAfter;
@@ -125,7 +125,7 @@ namespace EaiClassAdapter
                 : fileNameFormat;
 
             sc.User = Utils.NormalizeString(user);
-            sc.Password = pwd;  // 密碼不做 Normalize，避免影響特殊字元
+            sc.Password = pwd?.Trim('\'', '"') ?? string.Empty;  // ← 關鍵：去掉前後單引號
             sc.NetworkRetry = retry;
             sc.NetworkRetryInterval = interval;
 

@@ -28,26 +28,58 @@ namespace EaiClassAdapter
             }
         }
 
+        /// <summary>
+        /// 加強版：能處理帶引號、空白、< > 等髒資料的路徑
+        /// </summary>
         public static ITransferAdapter CreateByPath(string path)
         {
-            if (path.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase))
-                return new SFTPAdapter();
+            if (string.IsNullOrWhiteSpace(path))
+                return new FileAdapter();
 
-            if (path.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase))
+            // 先做最終清理（防萬一）
+            string clean = path.Trim().Trim('\'', '"', '<', '>');
+
+            // 使用 Uri 判斷（最準）
+            if (Uri.TryCreate(clean, UriKind.Absolute, out Uri uri))
+            {
+                string scheme = uri.Scheme.ToLowerInvariant();
+
+                if (scheme == "ftp")
+                    return new FTPAdapter();
+
+                if (scheme == "sftp")
+                    return new SFTPAdapter();
+            }
+
+            // 後備判斷（萬一 Uri 失敗）
+            string lower = clean.ToLowerInvariant();
+            if (lower.StartsWith("ftp://"))
                 return new FTPAdapter();
+
+            if (lower.StartsWith("sftp://"))
+                return new SFTPAdapter();
 
             return new FileAdapter();
         }
 
         public static AdapterType ResolveByPath(string path)
         {
-            if (path.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase))
+            string cleanPath = path?.Trim().Trim('\'', '"', '<', '>') ?? string.Empty;
+
+            if (Uri.TryCreate(cleanPath, UriKind.Absolute, out Uri uri))
+            {
+                string scheme = uri.Scheme.ToLowerInvariant();
+                if (scheme == "ftp") return AdapterType.FTP;
+                if (scheme == "sftp") return AdapterType.SFTP;
+            }
+
+            if (cleanPath.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase))
                 return AdapterType.FTP;
-            if (path.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase))
+
+            if (cleanPath.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase))
                 return AdapterType.SFTP;
 
             return AdapterType.File;
         }
-
     }
 }

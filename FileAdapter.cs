@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -23,7 +23,7 @@ namespace EaiClassAdapter
 
             var files = Directory.GetFiles(path, mask);
 
-            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "File Receive \r\nå¾ä¾†æºè·¯å¾‘ " + path + @"\" +  mask  + " æ”¶åˆ° "+  files.Length.ToString() + " å€‹æª”æ¡ˆ");
+            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "File Receive \r\n±q¨Ó·½¸ô®| " + path + @"\" +  mask  + " ¦¬¨ì "+  files.Length.ToString() + " ­ÓÀÉ®×");
 
             foreach (var file in files)
             {
@@ -46,29 +46,31 @@ namespace EaiClassAdapter
         // Send (Upload)
         // =========================
         public void Send(string localFilePath, SendContext context)
-        {
+        {            
             if (!File.Exists(localFilePath))
                 throw new FileNotFoundException(localFilePath);
 
-            string sendPath = context.SendPath;
+            string sendPath = context.SendPath;            
 
-            // â˜…â˜…â˜… é—œéµä¿®æ­£ï¼šä½¿ç”¨ SendFileNameFormat ä¾†ç”¢ç”Ÿç›®çš„æª”å â˜…â˜…â˜…
+            // ¡¹¡¹¡¹ ÃöÁä­×¥¿¡G¨Ï¥Î SendFileNameFormat ¨Ó²£¥Í¥ØªºÀÉ¦W ¡¹¡¹¡¹
             string fileName = FileNameFormatter.Format(
-                context.SendFileNameFormat ?? "%SourceFileName%",  // é˜²ç©º
-                Path.GetFileName(localFilePath)                    // å‚³å…¥åŸå§‹æª”å
+                context.SendFileNameFormat ?? "%SourceFileName%",  // ¨¾ªÅ
+                Path.GetFileName(localFilePath)                    // ¶Ç¤J­ì©lÀÉ¦W
             );
 
             fileName = Utils.NormalizeString(fileName);
 
             string destFile = Path.Combine(sendPath, fileName);
-                       
-            //EaiComponent.WriteEventLog("error",$"[FileAdapter.Send] ä¾†æº: {localFilePath}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] ä¾†æº: {localFilePath}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] æ ¼å¼: {context.SendFileNameFormat}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] ç”¢ç”Ÿæª”å: {fileName}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] å®Œæ•´ç›®çš„è·¯å¾‘: {destFile}");
 
-            // ç¢ºä¿ç›®çš„è³‡æ–™å¤¾å­˜åœ¨
+            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "File Send \r\n¥Øªº¸ô®| :" + destFile );
+
+            //EaiComponent.WriteEventLog("error",$"[FileAdapter.Send] ¨Ó·½: {localFilePath}");
+            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] ¨Ó·½: {localFilePath}");
+            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] ®æ¦¡: {context.SendFileNameFormat}");
+            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] ²£¥ÍÀÉ¦W: {fileName}");
+            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] §¹¾ã¥Øªº¸ô®|: {destFile}");
+
+            // ½T«O¥Øªº¸ê®Æ§¨¦s¦b
             Directory.CreateDirectory(sendPath);
 
             string fileCopyMode = context.FileCopyMode?.ToUpper() ?? "OVERWRITE";
@@ -82,7 +84,7 @@ namespace EaiClassAdapter
                         break;
 
                     case "CREATENEW":
-                        // ç”¢ç”Ÿä¸é‡è¤‡æª”å
+                        // ²£¥Í¤£­«½ÆÀÉ¦W
                         string extension = Path.GetExtension(fileName);
                         string nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
                         destFile = Path.Combine(sendPath, $"{nameWithoutExt}_{Guid.NewGuid():N}{extension}");
@@ -90,7 +92,7 @@ namespace EaiClassAdapter
                         break;
 
                     case "APPEND":
-                        // Append åªé©åˆæ–‡å­—æª”ï¼ŒäºŒé€²ä½æª”å»ºè­°ä¸è¦ç”¨
+                        // Append ¥u¾A¦X¤å¦rÀÉ¡A¤G¶i¦ìÀÉ«ØÄ³¤£­n¥Î
                         using (var fsDest = new FileStream(destFile, FileMode.Append, FileAccess.Write))
                         using (var fsSrc = File.OpenRead(localFilePath))
                         {
@@ -108,12 +110,12 @@ namespace EaiClassAdapter
                 File.Copy(localFilePath, destFile, true);
             }
 
-            // å»ºè­°åŠ  log ç¢ºèªï¼ˆæ¸¬è©¦å®Œå¯ç§»é™¤ï¼‰
-            // Console.WriteLine($"å·²è¤‡è£½æª”æ¡ˆ â†’ {destFile}");
+            // «ØÄ³¥[ log ½T»{¡]´ú¸Õ§¹¥i²¾°£¡^
+            // Console.WriteLine($"¤w½Æ»sÀÉ®× ¡÷ {destFile}");
         }
 
         // =========================
-        // ListFiles (åˆ—å‡ºé ç«¯æª”æ¡ˆ)
+        // ListFiles (¦C¥X»·ºİÀÉ®×)
         // =========================
         public string[] ListFiles(string path, string fileMask, string user, string password)
         {
