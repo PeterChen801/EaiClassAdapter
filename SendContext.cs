@@ -28,7 +28,9 @@
         public string SendFileNameFormat { get; set; } = "{OriginalName}";
 
         public string FileCopyMode { get; set; } //可改成 Appen/CreteNew/Overwrite
-
+        
+        // 新增：Job 專用 temp 資料夾
+        public string JobTempFolder { get; set; }
     }
 }
 

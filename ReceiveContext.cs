@@ -24,5 +24,8 @@
         public string LocalTempPath { get; set; }
         // 行為
         public bool DeleteAfterReceive { get; set; }
+
+        // 新增：Job 專用 temp 資料夾
+        public string JobTempFolder { get; set; }
     }
 }

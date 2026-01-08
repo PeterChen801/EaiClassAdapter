@@ -7,96 +7,90 @@ namespace EaiClassAdapter
     public class FileAdapter : ITransferAdapter
     {
         // =========================
-        // Receive (Download)
+        // Receive (Local → Temp)
         // =========================
         public string[] Receive(ReceiveContext context)
         {
-             var downloadedFiles = new List<string>();
+            var receivedFiles = new List<string>();
 
-
-            string path = context.ReceivePath;
+            string sourcePath = context.ReceivePath;
             string mask = context.ReceiveFileMask;
-            bool deleteAfterReceive = context.DeleteAfterReceive;            
+            bool deleteAfterReceive = context.DeleteAfterReceive;
 
-            if (!Directory.Exists(path))
-                throw new DirectoryNotFoundException($"Source path '{path}' not found.");
+            if (!Directory.Exists(sourcePath))
+                throw new DirectoryNotFoundException($"Source path '{sourcePath}' not found.");
 
-            var files = Directory.GetFiles(path, mask);
+            var files = Directory.GetFiles(sourcePath, mask);
 
-            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "File Receive \r\n從來源路徑 " + path + @"\" +  mask  + " 收到 "+  files.Length.ToString() + " 個檔案");
+            // Job 專用 temp folder（避免多執行緒衝突，不污染檔名）
+            string jobTempDir = Path.Combine(
+                Path.GetTempPath(),
+                "EaiJobTemp",
+                Guid.NewGuid().ToString("N")
+            );
+            Directory.CreateDirectory(jobTempDir);
+
+            context.JobTempFolder = jobTempDir; // 儲存給 TransferBinding 統一刪除
 
             foreach (var file in files)
             {
-                string tempDir = Path.Combine(Path.GetTempPath(), "EaiJobTemp");
-                Directory.CreateDirectory(tempDir);
+                string fileName = Path.GetFileName(file); // 保留原始檔名
+                string tempFile = Path.Combine(jobTempDir, fileName);
 
-                string destFile = Path.Combine(tempDir, Path.GetFileName(file));
-                File.Copy(file, destFile, true);
-
-                downloadedFiles.Add(destFile);
+                File.Copy(file, tempFile, true);
+                receivedFiles.Add(tempFile);
 
                 if (deleteAfterReceive)
+                {
                     File.Delete(file);
+                }
             }
 
-            return downloadedFiles.ToArray();
+            return receivedFiles.ToArray();
         }
 
         // =========================
-        // Send (Upload)
+        // Send (Local → Local)
         // =========================
         public void Send(string localFilePath, SendContext context)
-        {            
+        {
             if (!File.Exists(localFilePath))
                 throw new FileNotFoundException(localFilePath);
 
-            string sendPath = context.SendPath;            
-
-            // ★★★ 關鍵修正：使用 SendFileNameFormat 來產生目的檔名 ★★★
-            string fileName = FileNameFormatter.Format(
-                context.SendFileNameFormat ?? "%SourceFileName%",  // 防空
-                Path.GetFileName(localFilePath)                    // 傳入原始檔名
-            );
-
-            fileName = Utils.NormalizeString(fileName);
-
-            string destFile = Path.Combine(sendPath, fileName);
-
-            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "File Send \r\n目的路徑 :" + destFile );
-
-            //EaiComponent.WriteEventLog("error",$"[FileAdapter.Send] 來源: {localFilePath}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] 來源: {localFilePath}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] 格式: {context.SendFileNameFormat}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] 產生檔名: {fileName}");
-            //EaiComponent.WriteEventLog("error", $"[FileAdapter.Send] 完整目的路徑: {destFile}");
-
-            // 確保目的資料夾存在
+            string sendPath = context.SendPath;
             Directory.CreateDirectory(sendPath);
 
-            string fileCopyMode = context.FileCopyMode?.ToUpper() ?? "OVERWRITE";
+            string sourceFileName = Path.GetFileName(localFilePath);
+
+            string finalFileName = FileNameFormatter.Format(
+                context.SendFileNameFormat ?? "%SourceFileName%",
+                sourceFileName
+            );
+            finalFileName = Utils.NormalizeString(finalFileName);
+
+            string destFile = Path.Combine(sendPath, finalFileName);
+            string copyMode = context.FileCopyMode?.ToUpper() ?? "OVERWRITE";
 
             if (File.Exists(destFile))
             {
-                switch (fileCopyMode)
+                switch (copyMode)
                 {
                     case "OVERWRITE":
                         File.Copy(localFilePath, destFile, true);
                         break;
 
                     case "CREATENEW":
-                        // 產生不重複檔名
-                        string extension = Path.GetExtension(fileName);
-                        string nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
-                        destFile = Path.Combine(sendPath, $"{nameWithoutExt}_{Guid.NewGuid():N}{extension}");
+                        string ext = Path.GetExtension(finalFileName);
+                        string nameOnly = Path.GetFileNameWithoutExtension(finalFileName);
+                        destFile = Path.Combine(sendPath, $"{nameOnly}_{Guid.NewGuid():N}{ext}");
                         File.Copy(localFilePath, destFile, false);
                         break;
 
                     case "APPEND":
-                        // Append 只適合文字檔，二進位檔建議不要用
-                        using (var fsDest = new FileStream(destFile, FileMode.Append, FileAccess.Write))
-                        using (var fsSrc = File.OpenRead(localFilePath))
+                        using (var dest = new FileStream(destFile, FileMode.Append, FileAccess.Write, FileShare.None))
+                        using (var src = File.Open(localFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                         {
-                            fsSrc.CopyTo(fsDest);
+                            src.CopyTo(dest);
                         }
                         break;
 
@@ -110,12 +104,14 @@ namespace EaiClassAdapter
                 File.Copy(localFilePath, destFile, true);
             }
 
-            // 建議加 log 確認（測試完可移除）
-            // Console.WriteLine($"已複製檔案 → {destFile}");
+            EaiComponent.WriteEventLog_Inf(
+                "EaiClassAdapter",
+                $"File Send 成功\r\n來源: {localFilePath}\r\n目的: {destFile}"
+            );
         }
 
         // =========================
-        // ListFiles (列出遠端檔案)
+        // ListFiles
         // =========================
         public string[] ListFiles(string path, string fileMask, string user, string password)
         {
@@ -126,7 +122,7 @@ namespace EaiClassAdapter
         }
 
         // =========================
-        // Delete (Local)
+        // Delete
         // =========================
         public void Delete(string filePath)
         {

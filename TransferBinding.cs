@@ -32,17 +32,12 @@ namespace EaiClassAdapter
             int destIntervalValue = Utils.ToInt(destInterval);
             bool deleteAfter = Utils.ToBool(fileDeleteAfterReceive);
 
-            // Debug log - 建議保留到測試完成
-            Console.WriteLine($"[Transfer] Source: {sourcePath}");
-            Console.WriteLine($"[Transfer] Dest:   {destPath}");
-            Console.WriteLine($"[Transfer] Mask:   {sourceMask}");
-
             // ====== 建立 Adapter ======
             var sourceAdapter = AdapterFactory.CreateByPath(sourcePath);
             var destAdapter = AdapterFactory.CreateByPath(destPath);
 
-            Console.WriteLine($"[Transfer] Source Adapter: {sourceAdapter.GetType().Name}");
-            Console.WriteLine($"[Transfer] Dest Adapter:   {destAdapter.GetType().Name}");
+            //Console.WriteLine($"[Transfer] Source Adapter: {sourceAdapter.GetType().Name}");
+            //Console.WriteLine($"[Transfer] Dest Adapter:   {destAdapter.GetType().Name}");
 
             // ====== 建立 Context ======
             var rc = new ReceiveContext();
@@ -59,12 +54,36 @@ namespace EaiClassAdapter
             // ====== 執行傳輸 ======
             string[] files = sourceAdapter.Receive(rc);
 
-            Console.WriteLine($"[Transfer] Received {files.Length} files");
+            //Console.WriteLine($"[Transfer] Received {files.Length} files");
+            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", $"[Transfer] Received {files.Length} files");
+
+            // ★ 傳遞 JobTempFolder 給 SendContext，用於完成後自動刪除
+            sc.JobTempFolder = rc.JobTempFolder;
 
             foreach (var file in files)
             {
-                Console.WriteLine($"[Transfer] Sending: {Path.GetFileName(file)}");
+                //Console.WriteLine($"[Transfer] Sending: {Path.GetFileName(file)}");
+                EaiComponent.WriteEventLog_Inf("EaiClassAdapter", $"[Transfer] Sending: {Path.GetFileName(file)}");
                 destAdapter.Send(file, sc);
+            }
+
+            // ====== Send 完後自動刪除 Job 專用 Temp Folder ======
+            if (!string.IsNullOrEmpty(sc.JobTempFolder) && Directory.Exists(sc.JobTempFolder))
+            {
+                try
+                {
+                    Directory.Delete(sc.JobTempFolder, true);
+                    EaiComponent.WriteEventLog_Inf("EaiClassAdapter",
+                        $"Job Temp Folder 已刪除: {sc.JobTempFolder}");
+                    sc.JobTempFolder = null;
+                }
+                catch (Exception ex)
+                {
+                    EaiComponent.WriteEventLog_Inf(
+                        "EaiClassAdapter",
+                        $"刪除 Job Temp Folder 失敗: {sc.JobTempFolder}\r\n錯誤: {ex.Message}"
+                    );
+                }
             }
         }
 
@@ -90,7 +109,7 @@ namespace EaiClassAdapter
         {
             rc.ReceiveFileMask = mask;
             rc.User = Utils.NormalizeString(user);
-            rc.Password = pwd?.Trim('\'', '"') ?? string.Empty;  // ← 關鍵：去掉前後單引號
+            rc.Password = pwd?.Trim('\'', '"') ?? string.Empty;
             rc.NetworkRetry = retry;
             rc.NetworkRetryInterval = interval;
             rc.DeleteAfterReceive = deleteAfter;
@@ -116,73 +135,44 @@ namespace EaiClassAdapter
         }
 
         private void SetupSendContext(SendContext sc, ITransferAdapter adapter,
-    string path, string fileNameFormat, string user, string pwd,
-    int retry, int interval, string copyMode)
+            string path, string fileNameFormat, string user, string pwd,
+            int retry, int interval, string copyMode)
         {
-            // 1. 基本屬性設定
             sc.SendFileNameFormat = string.IsNullOrWhiteSpace(fileNameFormat)
                 ? "%SourceFileName%"
                 : fileNameFormat;
 
             sc.User = Utils.NormalizeString(user);
-            sc.Password = pwd?.Trim('\'', '"') ?? string.Empty;  // ← 關鍵：去掉前後單引號
+            sc.Password = pwd?.Trim('\'', '"') ?? string.Empty;
             sc.NetworkRetry = retry;
             sc.NetworkRetryInterval = interval;
-
-            // 2. 檔案複製模式預設值與標準化
             sc.FileCopyMode = string.IsNullOrWhiteSpace(copyMode)
                 ? "OVERWRITE"
                 : copyMode.Trim().ToUpperInvariant();
 
-            // 3. 處理目的地路徑（核心部分）
             string cleanPath = path?.Trim().Trim('\'', '"', '<', '>') ?? string.Empty;
-
-            // 強制把反斜線轉成正斜線（避免 ftp:\\ 這種常見錯誤）
             cleanPath = cleanPath.Replace('\\', '/');
 
             if (adapter is FTPAdapter || adapter is SFTPAdapter)
             {
-                // 遠端協議：使用 Uri 解析
                 if (Uri.TryCreate(cleanPath, UriKind.Absolute, out Uri uri))
                 {
                     sc.Host = uri.Host;
-
-                    // 取得路徑部分，去掉開頭的斜線（FTP/SFTP 通常不需要開頭 /）
                     sc.SendPath = uri.AbsolutePath.TrimStart('/');
-
-                    // 如果路徑為空，預設根目錄
-                    if (string.IsNullOrEmpty(sc.SendPath))
-                    {
-                        sc.SendPath = "/";
-                    }
+                    if (string.IsNullOrEmpty(sc.SendPath)) sc.SendPath = "/";
                 }
                 else
                 {
-                    // Uri 解析失敗的 fallback（例如使用者只給 host 名稱）
-                    sc.Host = cleanPath;  // 假設整個是 host
-                    sc.SendPath = "/";    // 預設根目錄
+                    sc.Host = cleanPath;
+                    sc.SendPath = "/";
                 }
             }
             else
             {
-                // 本地檔案系統：直接使用清理後的路徑
                 sc.SendPath = cleanPath;
-
-                // 確保本地路徑結尾沒有多餘斜線（可選，視需求保留或移除）
-                if (sc.SendPath.Length > 3 && sc.SendPath.EndsWith("\\"))
-                {
-                    sc.SendPath = sc.SendPath.TrimEnd('\\');
-                }
-
-                // 本地路徑不需要 Host
+                if (sc.SendPath.Length > 3 && sc.SendPath.EndsWith("\\")) sc.SendPath = sc.SendPath.TrimEnd('\\');
                 sc.Host = null;
             }
-            
-            // 可選：加入 debug log（測試階段使用，上線可註解）
-            // Console.WriteLine($"[SetupSendContext] Adapter: {adapter.GetType().Name}");
-            // Console.WriteLine($"[SetupSendContext] Host: {sc.Host ?? "N/A"}");
-            // Console.WriteLine($"[SetupSendContext] SendPath: {sc.SendPath}");
-            // Console.WriteLine($"[SetupSendContext] FileNameFormat: {sc.SendFileNameFormat}");
         }
     }
 }
