@@ -139,8 +139,8 @@ namespace EaiClassAdapter
 
         public static void Log(string enableLog, string message)
         {
-            if (!ToBool(enableLog)) return;
-            Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}");
+            if (!ToBool(enableLog)) return;            
+            EaiComponent.WriteEventLog_Inf("EaiClassAdapter", "Log:\r\n"+ "{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}");
         }
     }
 }

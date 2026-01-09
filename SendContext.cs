@@ -6,6 +6,8 @@
         public string SendPath { get; set; }
         public string SendFileName { get; set; }
 
+        public string Protocol { get; set; }
+
         // 帳密
         public string User { get; set; }
         public string Password { get; set; }
@@ -17,6 +19,8 @@
         // FTP only
         public string FtpAddress { get; set; }
 
+        // SFTP 用
+        public string PrivateKeyPath { get; set; }
         // Retry
         public int NetworkRetry { get; set; }
         public int NetworkRetryInterval { get; set; }
@@ -28,7 +32,9 @@
         public string SendFileNameFormat { get; set; } = "{OriginalName}";
 
         public string FileCopyMode { get; set; } //可改成 Appen/CreteNew/Overwrite
-
+        
+        // 新增：Job 專用 temp 資料夾
+        public string JobTempFolder { get; set; }
     }
 }
 

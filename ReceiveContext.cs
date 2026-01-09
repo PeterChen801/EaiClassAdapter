@@ -13,16 +13,23 @@
         public string Host { get; set; }
         public int Port { get; set; } = 22;
 
+        public string Protocol { get; set; }
         // File / FTP 帳密
         public string User { get; set; }
         public string Password { get; set; }
 
         // FTP only
         public string FtpAddress { get; set; }
+        
+        // SFTP 用
+        public string PrivateKeyPath { get; set; }   
 
         // === Local ===
         public string LocalTempPath { get; set; }
         // 行為
         public bool DeleteAfterReceive { get; set; }
+
+        // 新增：Job 專用 temp 資料夾
+        public string JobTempFolder { get; set; }
     }
 }
